@@ -3,7 +3,6 @@ import feedparser
 import time
 from deep_translator import GoogleTranslator
 import requests
-from bs4 import BeautifulSoup
 
 # --- ማስተካከያ ---
 API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
@@ -11,30 +10,70 @@ CHANNEL_ID = '@wewonalot'
 # ----------------
 
 bot = telebot.TeleBot(API_TOKEN)
-
-# የተለጠፉ ሊንኮችን ለማስታወስ
 posted_links = set()
 
 def translate_amharic(text):
     try:
-        # ጽሁፉ ከ 200 ፊደል በላይ ከሆነ ለትርጉም ይመቻል
         return GoogleTranslator(source='auto', target='am').translate(text)
     except:
         return text
 
-def get_image(url):
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # ፎቶውን ለማግኘት የተለያዩ የድረ-ገጽ ምልክቶችን መፈለግ
-        img = soup.find('meta', property='og:image') or \
-              soup.find('meta', name='twitter:image') or \
-              soup.find('link', rel='image_src')
-              
-        if img:
-            return img.get('content') or img.get('href')
+def get_dynamic_image(query):
+    # በዜናው ርዕስ መሰረት ፎቶ ለመፈለግ (Unsplash ወይም ሌላ ነፃ ምንጭ መጠቀም ይቻላል)
+    # ለጊዜው አስተማማኝ የሆነውን የዩናይትድ የፍለጋ ሊንክ እንጠቀማለን
+    search_query = query.replace(" ", "+")
+    return f"https://source.unsplash.com/800x600/?football,{search_query}"
+
+def send_news():
+    global posted_links
+    RSS_FEEDS = [
+        'https://www.skysports.com/rss/11667',
+        'https://www.manchestereveningnews.co.uk/sport/football/manchester-united-fc/?service=rss'
+    ]
+    
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:3]:
+            if entry.link not in posted_links:
+                if "united" in entry.title.lower():
+                    try:
+                        title_am = translate_amharic(entry.title)
+                        
+                        # በዜናው ርዕስ ውስጥ ያለውን ዋና ቃል ለፎቶ ፍለጋ መጠቀም
+                        # ለምሳሌ ርዕሱ "Amorim talks about Rashford" ቢሆን "Amorim"ን ይፈልጋል
+                        search_keyword = entry.title.split()[0] 
+                        image_url = get_dynamic_image(search_keyword)
+                        
+                        caption = (
+                            f"🔴 **ሰበር የዩናይትድ ዜና**\n\n"
+                            f"📌 {title_am}\n\n"
+                            f"🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n"
+                            f"ተከታተሉን 👉 {CHANNEL_ID}"
+                        )
+                        
+                        # ፎቶውን መላክ
+                        bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
+                        
+                        posted_links.add(entry.link)
+                        print(f"✅ ተለጠፈ: {entry.title}")
+                        time.sleep(5)
+                    except Exception as e:
+                        print(f"❌ Error: {e}")
+
+def initialize():
+    feed = feedparser.parse('https://www.skysports.com/rss/11667')
+    for entry in feed.entries:
+        posted_links.add(entry.link)
+
+if __name__ == "__main__":
+    print("🚀 ቦቱ በስማርት ፎቶ ፍለጋ ስራ ጀምሯል...")
+    initialize()
+    while True:
+        try:
+            send_news()
+        except Exception as e:
+            print(f"⚠️ Loop Error: {e}")
+        time.sleep(600)            return img.get('content') or img.get('href')
     except:
         pass
     # ፎቶ ካልተገኘ የሚለጠፍ የዩናይትድ ሎጎ
