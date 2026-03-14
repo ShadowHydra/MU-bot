@@ -6,7 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- ማስተካከያ ---
-API_TOKEN = 'ያንተ_ቶክን_እዚህ_ይግባ'
+API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
 CHANNEL_ID = '@wewonalot'
 # ----------------
 
