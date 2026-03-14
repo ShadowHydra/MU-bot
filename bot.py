@@ -5,6 +5,12 @@ from googletrans import Translator
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
+# ከላይ ከኢምፖርቶቹ ጋር ይሄን ጨምር
+from deep_translator import GoogleTranslator
+
+
+
+
 
 # --- ማስተካከያ ---
 API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
@@ -49,7 +55,12 @@ def send_news():
 
                 try:
                     # ትርጉም
-                    title_am = translator.translate(entry.title, dest='am').text
+# ኮዱ ውስጥ translator = Translator() የሚለውን አጥፍተህ በዚህ ተካው
+def translate_to_amharic(text):
+    try:
+        return GoogleTranslator(source='auto', target='am').translate(text)
+    except:
+        return text # ትርጉሙ ካልሰራ ዋናውን እንግሊዝኛውን ይላክ
                     
                     # ፎቶ መፈለግ
                     image_url = get_image(entry.link)
