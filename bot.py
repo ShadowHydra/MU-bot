@@ -2,7 +2,6 @@ import telebot
 import feedparser
 import time
 from deep_translator import GoogleTranslator
-import requests
 
 # --- ማስተካከያ ---
 API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
@@ -18,12 +17,6 @@ def translate_amharic(text):
     except:
         return text
 
-def get_dynamic_image(query):
-    # በዜናው ርዕስ መሰረት ፎቶ ለመፈለግ (Unsplash ወይም ሌላ ነፃ ምንጭ መጠቀም ይቻላል)
-    # ለጊዜው አስተማማኝ የሆነውን የዩናይትድ የፍለጋ ሊንክ እንጠቀማለን
-    search_query = query.replace(" ", "+")
-    return f"https://source.unsplash.com/800x600/?football,{search_query}"
-
 def send_news():
     global posted_links
     RSS_FEEDS = [
@@ -35,116 +28,40 @@ def send_news():
         feed = feedparser.parse(url)
         for entry in feed.entries[:3]:
             if entry.link not in posted_links:
-                if "united" in entry.title.lower():
+                # ዜናው ስለ ዩናይትድ መሆኑን ቼክ አድርግ
+                if "united" in entry.title.lower() or "man u" in entry.title.lower():
                     try:
                         title_am = translate_amharic(entry.title)
                         
-                        # በዜናው ርዕስ ውስጥ ያለውን ዋና ቃል ለፎቶ ፍለጋ መጠቀም
-                        # ለምሳሌ ርዕሱ "Amorim talks about Rashford" ቢሆን "Amorim"ን ይፈልጋል
-                        search_keyword = entry.title.split()[0] 
-                        image_url = get_dynamic_image(search_keyword)
-                        
+                        # ፎቶውን ቴሌግራም ራሱ እንዲያመጣው ሊንኩን መላክ
                         caption = (
                             f"🔴 **ሰበር የዩናይትድ ዜና**\n\n"
                             f"📌 {title_am}\n\n"
-                            f"🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n"
+                            f"🔗 {entry.link}\n\n" # ሊንኩ ከስር መሆኑ ፎቶው እንዲመጣ ይረዳል
                             f"ተከታተሉን 👉 {CHANNEL_ID}"
                         )
                         
-                        # ፎቶውን መላክ
-                        bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
+                        # በፎቶ ፋንታ በሜሴጅ እንልከዋለን (Link Preview እንዲሰራ)
+                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', disable_web_page_preview=False)
                         
                         posted_links.add(entry.link)
                         print(f"✅ ተለጠፈ: {entry.title}")
                         time.sleep(5)
                     except Exception as e:
-                        print(f"❌ Error: {e}")
+                        print(f"❌ ስህተት: {e}")
 
 def initialize():
+    print("🔄 የቆዩ ዜናዎችን በመመዝገብ ላይ...")
     feed = feedparser.parse('https://www.skysports.com/rss/11667')
     for entry in feed.entries:
         posted_links.add(entry.link)
+    print("✅ ዝግጁ!")
 
 if __name__ == "__main__":
-    print("🚀 ቦቱ በስማርት ፎቶ ፍለጋ ስራ ጀምሯል...")
     initialize()
     while True:
         try:
             send_news()
         except Exception as e:
             print(f"⚠️ Loop Error: {e}")
-        time.sleep(600)            return img.get('content') or img.get('href')
-    except:
-        pass
-    # ፎቶ ካልተገኘ የሚለጠፍ የዩናይትድ ሎጎ
-    return "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg"
-
-def send_news():
-    global posted_links
-    
-    # የዜና ምንጮች (Sky Sports, MEN, እና Fabrizio Romano በ Nitter በኩል)
-    RSS_FEEDS = [
-        'https://www.skysports.com/rss/11667',
-        'https://www.manchestereveningnews.co.uk/sport/football/manchester-united-fc/?service=rss',
-        'https://nitter.privacydev.net/FabrizioRomano/rss' # የፋብሪዚዮ ትዊተር በRSS
-    ]
-    
-    for url in RSS_FEEDS:
-        try:
-            feed = feedparser.parse(url)
-            # ከመጀመሪያዎቹ 3 አዳዲስ ዜናዎች ተነሳ
-            for entry in feed.entries[:3]:
-                if entry.link not in posted_links:
-                    
-                    # ስለ ዩናይትድ መሆኑን ቼክ አድርግ (ለፋብሪዚዮ ዜናዎች ጠቃሚ ነው)
-                    if "united" in entry.title.lower() or "man u" in entry.title.lower():
-                        
-                        title_am = translate_amharic(entry.title)
-                        image_url = get_image(entry.link)
-                        
-                        # የጽሁፍ ቅርጽ
-                        caption = (
-                            f"🔴 **ሰበር የዩናይትድ ዜና**\n\n"
-                            f"📌 {title_am}\n\n"
-                            f"🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n"
-                            f"ተከታተሉን 👉 {CHANNEL_ID}"
-                        )
-                        
-                        try:
-                    # ፎቶውን እኛ ከመላክ ይልቅ ቴሌግራም ራሱ እንዲያመጣው መተው
-                    bot.send_message(
-                        CHANNEL_ID, 
-                        caption, 
-                        parse_mode='Markdown', 
-                        disable_web_page_preview=False # ይህ መብራት አለበት
-                    )
-                    posted_links.add(entry.link)
-                    print(f"✅ ተለጠፈ: {entry.title}")
-                except Exception as e:
-                    print(f"❌ Error: {e}")
-            print(f"⚠️ Error fetching {url}: {e}")
-
-def initialize():
-    print("🔄 የቆዩ ዜናዎችን በመመዝገብ ላይ... እባክህ ታገስ")
-    initial_feeds = [
-        'https://www.skysports.com/rss/11667',
-        'https://www.manchestereveningnews.co.uk/sport/football/manchester-united-fc/?service=rss'
-    ]
-    for url in initial_feeds:
-        feed = feedparser.parse(url)
-        for entry in feed.entries:
-            posted_links.add(entry.link)
-    print(f"✅ {len(posted_links)} የቆዩ ዜናዎች ተመዝግበዋል። አዲስ ሲመጣ ብቻ ይለጠፋል።")
-
-if __name__ == "__main__":
-    print("🚀 ቦቱ ስራ ጀምሯል...")
-    initialize()
-    
-    while True:
-        try:
-            send_news()
-        except Exception as e:
-            print(f"❌ Loop Error: {e}")
-        
-        # በየ 10 ደቂቃው አዲስ ዜና ይፈልጋል
         time.sleep(600)
