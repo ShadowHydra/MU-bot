@@ -6,219 +6,103 @@ import requests
 from bs4 import BeautifulSoup
 
 # --- ማስተካከያ ---
-API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
+API_TOKEN = 'ያንተ_ቶክን_እዚህ_ይግባ'
 CHANNEL_ID = '@wewonalot'
 # ----------------
 
 bot = telebot.TeleBot(API_TOKEN)
 
-# የተለጠፉ ዜናዎችን ለማስታወስ (ድግግሞሽ ለመከላከል)
+# የተለጠፉ ሊንኮችን ለማስታወስ
 posted_links = set()
 
 def translate_amharic(text):
     try:
-        # አዲሱ እና አስተማማኝው የትርጉም መንገድ
+        # ጽሁፉ ከ 200 ፊደል በላይ ከሆነ ለትርጉም ይመቻል
         return GoogleTranslator(source='auto', target='am').translate(text)
     except:
         return text
 
 def get_image(url):
     try:
-        response = requests.get(url, timeout=10)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
-        img = soup.find('meta', property='og:image')
-        if img: return img['content']
+        
+        # ፎቶውን ለማግኘት የተለያዩ የድረ-ገጽ ምልክቶችን መፈለግ
+        img = soup.find('meta', property='og:image') or \
+              soup.find('meta', name='twitter:image') or \
+              soup.find('link', rel='image_src')
+              
+        if img:
+            return img.get('content') or img.get('href')
     except:
-        return "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg"
+        pass
+    # ፎቶ ካልተገኘ የሚለጠፍ የዩናይትድ ሎጎ
     return "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg"
 
 def send_news():
     global posted_links
-    RSS_FEEDS = [
-        'https://www.dailymail.co.uk/sport/teampages/manchester-united.rss',
-        'https://www.skysports.com/rss/11667'
-    ]
     
-    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:3]: # ከእያንዳንዱ 3 የቅርብ ዜና ብቻ
-            if entry.link not in posted_links:
-                try:
-                    title_am = translate_amharic(entry.title)
-                    image_url = get_image(entry.link)
-                    
-                    caption = f"🔴 **ሰበር የዩናይትድ ዜና**\n\n📌 {title_am}\n\n🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n@wewonalot"
-                    
-                    try:
-                        bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
-                    except:
-                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
-                    
-                    posted_links.add(entry.link)
-                    print(f"✅ ተለጠፈ: {entry.title}")
-                    time.sleep(5) 
-                except Exception as e:
-                    print(f"❌ ስህተት: {e}")
-
-# ቦቱ ሲነሳ ያሉትን ዜናዎች መዝግብ (ድግግሞሽ ለመከላከል)
-def initialize():
-    feed = feedparser.parse('https://www.dailymail.co.uk/sport/teampages/manchester-united.rss')
-    for entry in feed.entries:
-        posted_links.add(entry.link)
-
-print("🚀 ቦቱ በሰላም ስራ ጀምሯል...")
-initialize()
-
-while True:
-    try:
-        send_news()
-    except Exception as e:
-        print(f"⚠️ Loop Error: {e}")
-    time.sleep(600)    global posted_links
+    # የዜና ምንጮች (Sky Sports, MEN, እና Fabrizio Romano በ Nitter በኩል)
     RSS_FEEDS = [
-        'https://www.dailymail.co.uk/sport/teampages/manchester-united.rss',
         'https://www.skysports.com/rss/11667',
-        'https://news.google.com/rss/search?q=Manchester+United+news'
+        'https://www.manchestereveningnews.co.uk/sport/football/manchester-united-fc/?service=rss',
+        'https://nitter.privacydev.net/FabrizioRomano/rss' # የፋብሪዚዮ ትዊተር በRSS
     ]
     
     for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        for entry in feed.entries[:5]: # ከእያንዳንዱ ምንጭ የቅርብ 5ቱን ብቻ እይ
-            if entry.link not in posted_links:
-                
-                # ከ24 ሰዓት በፊት የነበሩ የቆዩ ዜናዎችን ዝለል
-                pub_date = getattr(entry, 'published_parsed', None)
-                if pub_date:
-                    dt = datetime(*pub_date[:6])
-                    if dt < datetime.now() - timedelta(days=1):
-                        continue
+        try:
+            feed = feedparser.parse(url)
+            # ከመጀመሪያዎቹ 3 አዳዲስ ዜናዎች ተነሳ
+            for entry in feed.entries[:3]:
+                if entry.link not in posted_links:
+                    
+                    # ስለ ዩናይትድ መሆኑን ቼክ አድርግ (ለፋብሪዚዮ ዜናዎች ጠቃሚ ነው)
+                    if "united" in entry.title.lower() or "man u" in entry.title.lower():
+                        
+                        title_am = translate_amharic(entry.title)
+                        image_url = get_image(entry.link)
+                        
+                        # የጽሁፍ ቅርጽ
+                        caption = (
+                            f"🔴 **ሰበር የዩናይትድ ዜና**\n\n"
+                            f"📌 {title_am}\n\n"
+                            f"🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n"
+                            f"ተከታተሉን 👉 {CHANNEL_ID}"
+                        )
+                        
+                        try:
+                            bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
+                        except:
+                            bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', disable_web_page_preview=False)
+                        
+                        posted_links.add(entry.link)
+                        print(f"✅ ተለጠፈ: {entry.title}")
+                        time.sleep(5) # በየመሃሉ እረፍት
+        except Exception as e:
+            print(f"⚠️ Error fetching {url}: {e}")
 
-                try:
-                    # ትርጉም
-# ኮዱ ውስጥ translator = Translator() የሚለውን አጥፍተህ በዚህ ተካው
-def translate_to_amharic(text):
-    try:
-        return GoogleTranslator(source='auto', target='am').translate(text)
-    except:
-        return text # ትርጉሙ ካልሰራ ዋናውን እንግሊዝኛውን ይላክ
-                    
-                    # ፎቶ መፈለግ
-                    image_url = get_image(entry.link)
-                    
-                    caption = f"🔴 **ሰበር የዩናይትድ ዜና**\n\n📌 {title_am}\n\n🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n@wewonalot"
-                    
-                    # መጀመሪያ ፎቶ ለመላክ ይሞክራል፣ ካልተሳካ በጽሁፍ ብቻ
-                    try:
-                        bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
-                    except:
-                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
-                    
-                    # ድግግሞሽ ለመከላከል ሊንኩን መመዝገብ
-                    posted_links.add(entry.link)
-                    print(f"✅ ተለጠፈ: {entry.title}")
-                    
-                    time.sleep(5) 
-                except Exception as e:
-                    print(f"❌ ስህተት: {e}")
-
-# ቦቱ ሲነሳ መጀመሪያ ያሉትን ዜናዎች እንደተለጠፉ ይቁጠራቸው (ድግግሞሽ ለመከላከል)
-def initialize_links():
-    global posted_links
-    feeds = ['https://www.dailymail.co.uk/sport/teampages/manchester-united.rss']
-    for url in feeds:
+def initialize():
+    print("🔄 የቆዩ ዜናዎችን በመመዝገብ ላይ... እባክህ ታገስ")
+    initial_feeds = [
+        'https://www.skysports.com/rss/11667',
+        'https://www.manchestereveningnews.co.uk/sport/football/manchester-united-fc/?service=rss'
+    ]
+    for url in initial_feeds:
         feed = feedparser.parse(url)
         for entry in feed.entries:
             posted_links.add(entry.link)
-
-print("🚀 ቦቱ ስራ ጀምሯል...")
-initialize_links() # መጀመሪያ የቆዩትን ይዝለል
-
-while True:
-    try:
-        send_news()
-    except Exception as e:
-        print(f"⚠️ Error in loop: {e}")
-    time.sleep(600) # በየ 10 ደቂቃው ይፈልጋል    for url in RSS_FEEDS:
-        feed = feedparser.parse(url)
-        for entry in feed.entries:
-            if entry.link not in posted_links:
-                # ከ24 ሰዓት በፊት የነበሩትን ዝለል
-                pub_date = getattr(entry, 'published_parsed', None)
-                if pub_date and datetime(*pub_date[:6]) < datetime.now() - timedelta(days=1):
-                    continue
-
-                # ትርጉም
-                title_am = translator.translate(entry.title, dest='am').text
-                summary_am = translator.translate(entry.summary[:300], dest='am').text if 'summary' in entry else ""
-                
-                # ፎቶ ፍለጋ
-                image_url = get_image(entry.link)
-                
-                caption = f"🔴 **ሰበር የዩናይትድ ዜና**\n\n📌 {title_am}\n\n📝 {summary_am}...\n\n🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n@wewonalot"
-                
-                try:
-                    bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
-                    posted_links.add(entry.link)
-                    print(f"✅ ተለጠፈ: {entry.title}")
-                except:
-                    bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
-                
-                time.sleep(5)
-
-while True:
-    try:
-        send_news()
-    except Exception as e:
-        print(f"❌ ስህተት: {e}")
-    time.sleep(600) # በየ 10 ደቂቃው ይፈልጋል
-def create_markup(link):
-    markup = types.InlineKeyboardMarkup(row_width=4)
-    btns = [
-        types.InlineKeyboardButton("🔥", callback_data="1"),
-        types.InlineKeyboardButton("❤️", callback_data="2"),
-        types.InlineKeyboardButton("👏", callback_data="3"),
-        types.InlineKeyboardButton("😮", callback_data="4")
-    ]
-    share_btn = types.InlineKeyboardButton("📤 ለጓደኛዎ ያጋሩ", url=f"https://t.me/share/url?url={link}")
-    markup.add(*btns)
-    markup.row(share_btn)
-    return markup
-
-def start_bot():
-    print("🚀 Render ላይ ስራ ተጀምሯል - ሰፊ ፍለጋ...")
-    
-    for url in SOURCES:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:
-                title_en = entry.title.split(" - ")[0]
-                # የላቲን ኮዶችን ማጽጃ
-                summary_en = re.sub('<[^<]+?>', '', entry.summary)[:500]
-                link = entry.link
-
-                try:
-                    # Render ላይ ትርጉሙ በደንብ ይሰራል
-                    title_am = translator.translate(title_en, dest='am').text
-                    summary_am = translator.translate(summary_en, dest='am').text
-                    
-                    caption = (
-                        f"🔴 **{title_am}**\n\n"
-                        f"📝 **ዝርዝር መረጃ:**\n{summary_am}...\n\n"
-                        f"🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({link})\n\n"
-                        f"👉 @wewonalot"
-                    )
-
-                    bot.send_photo(CHANNEL_ID, DEFAULT_IMAGE, caption=caption, parse_mode="Markdown", reply_markup=create_markup(link))
-                    print(f"✅ ተለጠፈ: {title_en[:20]}")
-                    time.sleep(15) # ለቴሌግራም ደህንነት
-                except Exception as e:
-                    print(f"⚠️ ትርጉም/መላክ አልተሳካም: {e}")
-
-        except Exception as e:
-            print(f"❌ ምንጩ አልሰራም: {e}")
-
-    time.sleep(600) # በየ 10 ደቂቃው እንዲፈልግ
+    print(f"✅ {len(posted_links)} የቆዩ ዜናዎች ተመዝግበዋል። አዲስ ሲመጣ ብቻ ይለጠፋል።")
 
 if __name__ == "__main__":
+    print("🚀 ቦቱ ስራ ጀምሯል...")
+    initialize()
+    
     while True:
-        start_bot()
+        try:
+            send_news()
+        except Exception as e:
+            print(f"❌ Loop Error: {e}")
+        
+        # በየ 10 ደቂቃው አዲስ ዜና ይፈልጋል
+        time.sleep(600)
