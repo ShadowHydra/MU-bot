@@ -1,40 +1,72 @@
-
 import telebot
 import feedparser
 import time
 from googletrans import Translator
-from telebot import types
-import re
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 
-# --- 1. መለያዎች ---
-API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48' # ያንተን ቶክን እዚህ አስገባ
+# --- ማስተካከያ ---
+API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
 CHANNEL_ID = '@wewonalot'
-DEFAULT_IMAGE = "https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Manchester_United_FC_crest.svg/1200px-Manchester_United_FC_crest.svg.png"
+# ----------------
 
 bot = telebot.TeleBot(API_TOKEN)
 translator = Translator()
 
-# --- 2. ሰፊ የዜና ምንጮች (Facebook/Twitter/Transfer News በ Google በኩል) ---
-SOURCES = [
-    # የፌስቡክ እና ትዊተር ሰበር ዜናዎች
-    "https://news.google.com/rss/search?q=Manchester+United+breaking+news+Facebook+Twitter+when:1h&hl=en-US&gl=US&ceid=US:en",
-    # የዝውውር ወሬዎች
-    "https://news.google.com/rss/search?q=Manchester+United+transfer+rumors+newsnow&hl=en-US&gl=US&ceid=US:en",
-    # የጨዋታ ውጤት እና የቀጥታ መረጃ
-    "https://news.google.com/rss/search?q=Manchester+United+match+score+live&hl=en-US&gl=US&ceid=US:en",
-    # 1. የታወቁ ጋዜጠኞች (Fabrizio, Ornstein, ወዘተ) የዩናይትድ ዜናዎች
-    "https://news.google.com/rss/search?q=Manchester+United+Fabrizio+Romano+OR+David+Ornstein+when:1h&hl=en-US&gl=US&ceid=US:en",
-    
-    # 2. የManchester Evening News ጋዜጠኞች (Samuel Luckhurst)
-    "https://news.google.com/rss/search?q=Samuel+Luckhurst+Manchester+United+when:1h&hl=en-US&gl=US&ceid=US:en",
-    
-    # 3. የሶሻል ሚዲያ ሰበር ወሬዎች (Twitter/X trends)
-    "https://news.google.com/rss/search?q=Manchester+United+Twitter+breaking+news+when:1h&hl=en-US&gl=US&ceid=US:en",
-    
-    # 4. የዝውውር ወሬዎች
-    "https://news.google.com/rss/search?q=Manchester+United+transfer+rumors+newsnow&hl=en-US&gl=US&ceid=US:en"
+# የዜና ምንጮች (ታማኝ ጋዜጠኞች እና ድረ-ገጾች)
+RSS_FEEDS = [
+    'https://www.dailymail.co.uk/sport/teampages/manchester-united.rss',
+    'https://www.skysports.com/rss/11667',
+    'https://news.google.com/rss/search?q=Manchester+United+news'
 ]
 
+posted_links = set()
+
+def get_image(url):
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # ዋናውን ፎቶ ለመፈለግ የሚረዳ
+        img = soup.find('meta', property='og:image')
+        if img: return img['content']
+    except: return "https://መቆያ_ፎቶ_ሊንክ" # ፎቶ ከጠፋ የሚሆን
+    return "https://መቆያ_ፎቶ_ሊንክ"
+
+def send_news():
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries:
+            if entry.link not in posted_links:
+                # ከ24 ሰዓት በፊት የነበሩትን ዝለል
+                pub_date = getattr(entry, 'published_parsed', None)
+                if pub_date and datetime(*pub_date[:6]) < datetime.now() - timedelta(days=1):
+                    continue
+
+                # ትርጉም
+                title_am = translator.translate(entry.title, dest='am').text
+                summary_am = translator.translate(entry.summary[:300], dest='am').text if 'summary' in entry else ""
+                
+                # ፎቶ ፍለጋ
+                image_url = get_image(entry.link)
+                
+                caption = f"🔴 **ሰበር የዩናይትድ ዜና**\n\n📌 {title_am}\n\n📝 {summary_am}...\n\n🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n@wewonalot"
+                
+                try:
+                    bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
+                    posted_links.add(entry.link)
+                    print(f"✅ ተለጠፈ: {entry.title}")
+                except:
+                    bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
+                
+                time.sleep(5)
+
+while True:
+    try:
+        send_news()
+    except Exception as e:
+        print(f"❌ ስህተት: {e}")
+    time.sleep(600) # በየ 10 ደቂቃው ይፈልጋል
 def create_markup(link):
     markup = types.InlineKeyboardMarkup(row_width=4)
     btns = [
