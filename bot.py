@@ -72,14 +72,17 @@ def send_news():
                         )
                         
                         try:
-                            bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
-                        except:
-                            bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown', disable_web_page_preview=False)
-                        
-                        posted_links.add(entry.link)
-                        print(f"✅ ተለጠፈ: {entry.title}")
-                        time.sleep(5) # በየመሃሉ እረፍት
-        except Exception as e:
+                    # ፎቶውን እኛ ከመላክ ይልቅ ቴሌግራም ራሱ እንዲያመጣው መተው
+                    bot.send_message(
+                        CHANNEL_ID, 
+                        caption, 
+                        parse_mode='Markdown', 
+                        disable_web_page_preview=False # ይህ መብራት አለበት
+                    )
+                    posted_links.add(entry.link)
+                    print(f"✅ ተለጠፈ: {entry.title}")
+                except Exception as e:
+                    print(f"❌ Error: {e}")
             print(f"⚠️ Error fetching {url}: {e}")
 
 def initialize():
