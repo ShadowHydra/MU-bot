@@ -1,16 +1,9 @@
 import telebot
 import feedparser
 import time
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-# ከላይ ከኢምፖርቶቹ ጋር ይሄን ጨምር
-from deep_translator import GoogleTranslator
-
-
-
-
 
 # --- ማስተካከያ ---
 API_TOKEN = '8683345761:AAGMWkPkvaG1rzh-yAzu6PPRTr9QKo5Bh48'
@@ -18,10 +11,16 @@ CHANNEL_ID = '@wewonalot'
 # ----------------
 
 bot = telebot.TeleBot(API_TOKEN)
-translator = Translator()
 
 # የተለጠፉ ዜናዎችን ለማስታወስ (ድግግሞሽ ለመከላከል)
 posted_links = set()
+
+def translate_amharic(text):
+    try:
+        # አዲሱ እና አስተማማኝው የትርጉም መንገድ
+        return GoogleTranslator(source='auto', target='am').translate(text)
+    except:
+        return text
 
 def get_image(url):
     try:
@@ -35,6 +34,47 @@ def get_image(url):
 
 def send_news():
     global posted_links
+    RSS_FEEDS = [
+        'https://www.dailymail.co.uk/sport/teampages/manchester-united.rss',
+        'https://www.skysports.com/rss/11667'
+    ]
+    
+    for url in RSS_FEEDS:
+        feed = feedparser.parse(url)
+        for entry in feed.entries[:3]: # ከእያንዳንዱ 3 የቅርብ ዜና ብቻ
+            if entry.link not in posted_links:
+                try:
+                    title_am = translate_amharic(entry.title)
+                    image_url = get_image(entry.link)
+                    
+                    caption = f"🔴 **ሰበር የዩናይትድ ዜና**\n\n📌 {title_am}\n\n🔗 [ሙሉውን ለማንበብ እዚህ ይጫኑ]({entry.link})\n\n@wewonalot"
+                    
+                    try:
+                        bot.send_photo(CHANNEL_ID, image_url, caption=caption, parse_mode='Markdown')
+                    except:
+                        bot.send_message(CHANNEL_ID, caption, parse_mode='Markdown')
+                    
+                    posted_links.add(entry.link)
+                    print(f"✅ ተለጠፈ: {entry.title}")
+                    time.sleep(5) 
+                except Exception as e:
+                    print(f"❌ ስህተት: {e}")
+
+# ቦቱ ሲነሳ ያሉትን ዜናዎች መዝግብ (ድግግሞሽ ለመከላከል)
+def initialize():
+    feed = feedparser.parse('https://www.dailymail.co.uk/sport/teampages/manchester-united.rss')
+    for entry in feed.entries:
+        posted_links.add(entry.link)
+
+print("🚀 ቦቱ በሰላም ስራ ጀምሯል...")
+initialize()
+
+while True:
+    try:
+        send_news()
+    except Exception as e:
+        print(f"⚠️ Loop Error: {e}")
+    time.sleep(600)    global posted_links
     RSS_FEEDS = [
         'https://www.dailymail.co.uk/sport/teampages/manchester-united.rss',
         'https://www.skysports.com/rss/11667',
